@@ -2,6 +2,8 @@
 #include <EEPROM.h>
 #include <HX711.h>
   
+const int RELAIS = 2; // Porta digital D2 usada pelo relé
+
 // Define as conexões da balança e cria o objeto para acesso
 const int CELULA_DADO = 11;
 const int CELULA_CLOCK = 13;
@@ -9,13 +11,7 @@ HX711 celulaCarga;
   
 // Define as conexões do display e cria o objeto para acesso
 const int RS = 8, EN = 9, D4 = 4, D5 = 5, D6 = 6, D7 = 7;
-//const int BACK_LIGHT = 10;
 LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
-
-int RELAIS = 2;
-
-// Limites para detecção das teclas, em ordem crescente
-int limiteTecla[] = {50, 195, 380, 550, 800, 1500};
   
 // Indices para as teclas
 const int TEC_DIREITA = 0;
@@ -132,7 +128,7 @@ void ajustaTara() {
   delay(500);
   celulaCarga.tare(50);
 }
-//---------------------------------------------------------------------------------------------------------------  
+
 // Efetua a calibração da balança
 void calibra() {
   // Mostra as instruções
@@ -156,26 +152,22 @@ void calibra() {
   }
   lcd.clear();
   lcd.print("Aguarde......");
-  delay(1000);
-  
+  delay(1000); 
   // Faz a leitura e calcula a escala
   long leitura = celulaCarga.read_average(50);
   float escala = (leitura - celulaCarga.get_offset())/200.00f;
-  
   // Salva na EEProm
   EEPROM.put(ENDER_ESCALA, escala);
   EEPROM.write(ENDER_FLAG, FLAG_CALIBRADA);
-  
   // Usa a escala calculada
   celulaCarga.set_scale(escala);
 }
-//-----------------------------------------------------------------------------------------------------------  
-// Le uma tecla
-// Cada tecla do shield resulta em uma tensão diferente em A0
+
+// Le uma tecla (cada tecla do shield causa uma tensão diferente em A0)
 int leTecla() {
+  static const int limiteTecla[] = {50, 195, 380, 550, 800, 1500}; // Limites para detecção das teclas
   int leitura = analogRead(A0);
-  int tecla;
-  for (tecla = 0; tecla < 6; tecla++) {
+  for (int tecla = 0; tecla < 6; tecla++) {
     if (leitura < limiteTecla[tecla]) {
       return tecla;
     }
