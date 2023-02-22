@@ -81,7 +81,8 @@ void loop() {
       lcd.print("P/ tarar  SEL." );
       lcd.setCursor(0,1);
       lcd.print("Outra qq cancela");
-      while (leTecla() == TEC_NENHUMA) {
+      delay(1000);      
+      while ((tecla = leTecla()) == TEC_NENHUMA) {
         delay(100);
       }
       if (tecla == TEC_SELECT) {
@@ -90,16 +91,19 @@ void loop() {
       break;
     case TEC_CIMA:
       digitalWrite(RELAIS, LOW);
+      delay(100);
       break;
     case TEC_BAIXO:
       digitalWrite(RELAIS, HIGH);
+      delay(100);      
       break;
     case TEC_ESQUERDA:
       lcd.clear();
       lcd.print("P/ calibrar SEL." );
       lcd.setCursor(0,1);
       lcd.print("Outra qq cancela");
-      while (leTecla() == TEC_NENHUMA) {
+      delay(1000);
+      while ((tecla = leTecla()) == TEC_NENHUMA) {
         delay(100);
       }
       if (tecla == TEC_SELECT) {
@@ -165,9 +169,9 @@ void calibra() {
 
 // Le uma tecla (cada tecla do shield causa uma tensão diferente em A0)
 int leTecla() {
-  static const int limiteTecla[] = {50, 195, 380, 550, 800, 1500}; // Limites para detecção das teclas
+  static const int limiteTecla[] = {60, 200, 400, 600, 800}; // Limites para detecção das teclas
   int leitura = analogRead(A0);
-  for (int tecla = 0; tecla < 6; tecla++) {
+  for (int tecla = 0; tecla < 5; tecla++) {
     if (leitura < limiteTecla[tecla]) {
       return tecla;
     }
