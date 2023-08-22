@@ -5,9 +5,9 @@
 const int RELAIS = 2; // Porta digital D2 usada pelo relé
 
 // Define as conexões da balança e cria o objeto para acesso
-const int CELULA_DADO = 11;
-const int CELULA_CLOCK = 13;
-HX711 celulaCarga;
+const int PSENSOR_DATA = 11;
+const int PSENSOR_CLOCK = 13;
+HX711 pressureSensor;
   
 // Define as conexões do display e cria o objeto para acesso
 const int RS = 8, EN = 9, D4 = 4, D5 = 5, D6 = 6, D7 = 7;
@@ -21,31 +21,35 @@ const int TEC_ESQUERDA = 3;
 const int TEC_SELECT = 4;
 const int TEC_NENHUMA = 5;
    
-// Endereços na EEProm
-const int ENDER_FLAG = 0;
-const int ENDER_ESCALA = 1;
+// Endereços na EEPROM
+const int ADDRESS_FLAG = 0;
+const int ADDRESS_ANGULAR = 1;
+const int ADDRESS_INTERCEPT = 5;
   
 // Indicação de balança calibrada
 const byte FLAG_CALIBRADA = 0x55;
   
 // Inicialização
 float cargaMax = 0;
+float tara = 0, pretensao = 0;
 void setup() {
   Serial.begin(115200);
   pinMode(RELAIS, OUTPUT);
   digitalWrite(RELAIS, HIGH);
   lcd.begin(16, 2);
   // Iniciação do HX711
-  celulaCarga.begin(CELULA_DADO, CELULA_CLOCK);
+  pressureSensor.begin(PSENSOR_DATA, PSENSOR_CLOCK);
   ajustaTara();
   mostraVersao();
-  if (EEPROM.read(ENDER_FLAG) != FLAG_CALIBRADA) {
+  if (EEPROM.read(ADDRESS_FLAG) != FLAG_CALIBRADA) {
     calibra();
   } else {
     // Usa escala salva na EEPROM
-    float escala;
-    EEPROM.get (ENDER_ESCALA, escala);
-    celulaCarga.set_scale(escala);
+    float escala, offset;
+    EEPROM.get (ADDRESS_ANGULAR, escala);
+    EEPROM.get (ADDRESS_INTERCEPT, pretensao);    
+    pressureSensor.set_scale(escala);
+    pressureSensor.set_offset(tara - pretensao);
   }
 }
   
@@ -53,7 +57,7 @@ void setup() {
 void loop() {
   // Lê e mostra a carga
   lcd.clear();
-  float carga = celulaCarga.get_units();
+  float carga = pressureSensor.get_units();
   cargaMax = max(carga, cargaMax);
   char medida[17];
   char texto[17] = "Atual  ";
@@ -124,16 +128,18 @@ void mostraVersao() {
   delay(1000);
 }
   
-// Ajusta o offset para o valor da balança vazia
+// Ajusta o offset para o valor da sensor em vazio
 void ajustaTara() {
   lcd.clear();
   lcd.setCursor(0,1);
   lcd.print("Registrando TARA");
   delay(500);
-  celulaCarga.tare(50);
+  pressureSensor.tare(50);
+  tara = pressureSensor.get_offset();
+  pressureSensor.set_offset(tara - pretensao);    
 }
 
-// Efetua a calibração da balança
+// Efetua a calibração do sensor
 void calibra() {
   // Mostra as instruções
   lcd.clear();
@@ -157,14 +163,39 @@ void calibra() {
   lcd.clear();
   lcd.print("Aguarde......");
   delay(1000); 
-  // Faz a leitura e calcula a escala
-  long leitura = celulaCarga.read_average(50);
-  float escala = (leitura - celulaCarga.get_offset())/200.00f;
-  // Salva na EEProm
-  EEPROM.put(ENDER_ESCALA, escala);
-  EEPROM.write(ENDER_FLAG, FLAG_CALIBRADA);
+  // Faz a leitura correspondente a 200 kN
+  long leitura200 = pressureSensor.read_average(50);
+  // Instruções para 50 kN
+  lcd.clear();
+  lcd.print("Comprimir 0.4 mm");
+  lcd.setCursor(0,1);
+  lcd.print("ANEL DINATST 278");
+  delay (3000);
+  lcd.clear();
+  lcd.print ("Aperte SELECT");
+  while (leTecla() != TEC_SELECT) {
+    delay(100);
+  }
+  lcd.setCursor(0,1);
+  lcd.print("Solte  SELECT");
+  while (leTecla() != TEC_NENHUMA) {
+    delay(100);
+  }
+  lcd.clear();
+  lcd.print("Aguarde......");
+  delay(1000); 
+  // Faz a leitura e calcula a escala em counts/kN
+  long leitura50 = pressureSensor.read_average(50);
+  float escala = (leitura200 - leitura50)/150.0f;
+  // Calcula em "counts" (unidade de saída do ADC) a pré-tensão da mola
+  pretensao = -(leitura50 - escala*50.0f - tara);
+  // Salva na EEPROM
+  EEPROM.put(ADDRESS_ANGULAR, escala);
+  EEPROM.put(ADDRESS_INTERCEPT, pretensao);  
+  EEPROM.write(ADDRESS_FLAG, FLAG_CALIBRADA);
   // Usa a escala calculada
-  celulaCarga.set_scale(escala);
+  pressureSensor.set_scale(escala);
+  pressureSensor.set_offset(tara - pretensao);  
 }
 
 // Le uma tecla (cada tecla do shield causa uma tensão diferente em A0)
